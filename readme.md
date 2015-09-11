@@ -4,9 +4,13 @@ It isn't production ready and use myself for simple interface for etcd under win
 https://github.com/xetorthio/etcd-fs
 
 For usage:
+
 1. download binary or compile sources
+
 2. create directory for sync with etcd
+
 3. create MARK-file .ETCDIR_MARK_FILE_HUGSDBDND in the directory
+
 4. run etcdir <PATH_TO_DIRECTORY_WITH_MARK_FILE>
 
 example:
