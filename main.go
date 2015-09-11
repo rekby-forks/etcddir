@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/coreos/etcd/client"
 	"github.com/rjeczalik/notify"
-	"golang.org/x/net/context"
+	"github.com/coreos/etcd/Godeps/_workspace/src/golang.org/x/net/context"
 	"io/ioutil"
 	"log"
 	"os"
@@ -20,6 +20,7 @@ const MARK_FILE_NAME = ".ETCDIR_MARK_FILE_HUGSDBDND"
 const DEFAULT_DIRMODE = 0700
 const DEFAULT_FILEMODE = 0600
 const EVENT_CHANNEL_LEN = 1000
+const LOCK_INTERVAL = time.Second
 
 type fileChangeEvent struct {
 	Path      string
@@ -118,6 +119,12 @@ func main() {
 		fmt.Printf(`You have to create file '%[1]v' before usage dir as syncdir. You can do it by command:
 echo > %[1]v
 `, filepath.Join(dir, MARK_FILE_NAME))
+		return
+	}
+
+	if !lock(dir){
+		log.Println("Can't get lock. May be another instance work with the dir")
+		return
 	}
 
 	etcdConfig := client.Config{Endpoints: []string{"http://127.0.0.1:4001"}}
@@ -133,7 +140,7 @@ echo > %[1]v
 }
 
 func printUsage() {
-	fmt.Printf(`{0} <syncdir>
+	fmt.Printf(`%v <syncdir>
 syncdir - directory for show etcd content. ALL CURRENT CONTENT WILL BE LOST.
 you have to create file '{1}' in syncdir before can use it.
 `, os.Args[0], MARK_FILE_NAME)
@@ -175,6 +182,28 @@ func firstSyncEtcDir(etcdConfig client.Config, path string) (etcdIndex uint64) {
 	}
 	writeNodeToDir(path, response.Node)
 	return response.Index
+}
+
+func lock(dir string)bool{
+	lockFile := filepath.Join(dir, MARK_FILE_NAME)
+	stat, err := os.Stat(lockFile)
+	if err != nil {
+		log.Println("Can't stat lock file: ", lockFile, err)
+		return false
+	}
+	if time.Now().Sub(stat.ModTime()) <= LOCK_INTERVAL {
+		return false
+	}
+
+	pid := os.Getpid()
+	go func(){
+		for {
+			mess := fmt.Sprint("PID: ", pid, "\nLAST TIME: ", time.Now().String())
+			ioutil.WriteFile(lockFile, []byte(mess), DEFAULT_FILEMODE)
+			time.Sleep(LOCK_INTERVAL / 3)
+		}
+	}()
+	return true
 }
 
 func syncProcess(dir string, etcdConfig client.Config, etcdChan, fsChan <-chan fileChangeEvent) {
