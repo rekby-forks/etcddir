@@ -17,8 +17,8 @@ import (
 )
 
 const MARK_FILE_NAME = ".ETCDIR_MARK_FILE_HUGSDBDND" // Name of lock-file for prevent bad things
-const DEFAULT_DIRMODE = 0700
-const DEFAULT_FILEMODE = 0600
+const DEFAULT_DIRMODE = 0777
+const DEFAULT_FILEMODE = 0777
 const EVENT_CHANNEL_LEN = 1000
 const LOCK_INTERVAL = time.Second // Wait since previous touch to can get lock directory once more.
 
@@ -173,7 +173,7 @@ func lock(dir string)bool{
 }
 
 func main() {
-	if len(os.Args) != 2 {
+	if len(os.Args) < 2 {
 		printUsage()
 		return
 	}
@@ -204,7 +204,14 @@ echo > %[1]v
 		return
 	}
 
-	etcdConfig := client.Config{Endpoints: []string{"http://127.0.0.1:4001"}}
+	addr := "http://127.0.0.1:4001"
+	if len(os.Args) > 2 {
+		addr = os.Args[2]
+	}
+
+	fmt.Println(addr)
+	etcdConfig := client.Config{Endpoints: []string{addr}}
+	fmt.Println(etcdConfig)
 	etcdStartFrom := firstSyncEtcDir(etcdConfig, dir)
 
 	etcdChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
