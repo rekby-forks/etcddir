@@ -22,12 +22,13 @@ etcdir c:\\tmp\\etcdir
 
 The mark-file need for prevent fatal-error: etcdir REMOVE ALL CONTENTS from synced dir when start and replace it from etcd.
 
-
-Now it work only with default etcd: http://localhost:2379 without authentication - for work with local server.
+Default it is connect to localhost, port 2379 with api version 3.
+You can change the servres address and api version.
+It doesn't support any authentication now. If you need - welcome issue or pull-request.
 If you need normal authenticate mode - write me or create pull request.
 
 
-Can work with 2 and 3 api versions. APIv3 is default. Now it is compete ignore dirs while sync (sync only files content)
+Now it is compete ignore dirs while sync for api v3 (sync only files content).
 Now it isn't support for have key, which is directory in map semantic.
 
 For example if etcd have keys:
@@ -37,4 +38,5 @@ For example if etcd have keys:
     qqq/222.txt
     fff.txt
     
-then it will create files qqq/222.txt and fff.txt. For asd/123.txt is undefined behaviour: it may create\update the file, but may not.
+then it will create files qqq/222.txt and fff.txt.
+For asd/123.txt is undefined behaviour: it may create\update the file, but may not.
