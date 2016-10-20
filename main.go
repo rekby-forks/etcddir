@@ -17,8 +17,8 @@ import (
 )
 
 const MARK_FILE_NAME = ".ETCDIR_MARK_FILE_HUGSDBDND" // Name of lock-file for prevent bad things
-const DEFAULT_DIRMODE = 0700
-const DEFAULT_FILEMODE = 0600
+const DEFAULT_DIRMODE = 0777
+const DEFAULT_FILEMODE = 0777
 const EVENT_CHANNEL_LEN = 1000
 const LOCK_INTERVAL = time.Second // Wait since previous touch to can get lock directory once more.
 
@@ -33,7 +33,7 @@ type fileChangeEvent struct {
 Monitoring changes in etcd server.
 It designed for run in separate goroutine.
  */
-func etcdMon(config client.Config, bus chan fileChangeEvent, startIndex uint64) {
+func etcdMon(etcdRootPath string, config client.Config, bus chan fileChangeEvent, startIndex uint64) {
 	c, err := client.New(config)
 	if err != nil {
 		panic(err)
@@ -41,7 +41,7 @@ func etcdMon(config client.Config, bus chan fileChangeEvent, startIndex uint64) 
 	kapi := client.NewKeysAPI(c)
 	var nextEvent uint64 = startIndex
 	for {
-		response, err := kapi.Watcher("/", &client.WatcherOptions{AfterIndex: nextEvent, Recursive: true}).Next(context.Background())
+		response, err := kapi.Watcher(etcdRootPath, &client.WatcherOptions{AfterIndex: nextEvent, Recursive: true}).Next(context.Background())
 		if err != nil {
 			log.Println(err)
 			time.Sleep(time.Second)
@@ -108,7 +108,7 @@ func fileMon(path string, bus chan fileChangeEvent) {
 Clear dir and dump content of etcd to the dir.
 ATTENTION: the function REMOVE ALL CONTENT of the dir.
  */
-func firstSyncEtcDir(etcdConfig client.Config, dir string) (etcdIndex uint64) {
+func firstSyncEtcDir(etcdRootPath string, etcdConfig client.Config, dir string) (etcdIndex uint64) {
 	dirFile, err := os.Open(dir)
 	if err != nil {
 		panic(err)
@@ -137,12 +137,12 @@ func firstSyncEtcDir(etcdConfig client.Config, dir string) (etcdIndex uint64) {
 	}
 
 	kapi := client.NewKeysAPI(etcdClient)
-	response, err := kapi.Get(context.Background(), "/", &client.GetOptions{Recursive: true, Quorum: true})
+	response, err := kapi.Get(context.Background(), etcdRootPath, &client.GetOptions{Recursive: true, Quorum: true})
 	if err != nil {
 		fmt.Println("I can't get initial etcd state: ", err)
 		panic(err)
 	}
-	writeNodeToDir(dir, response.Node)
+	writeNodeToDir(dir, etcdRootPath, response.Node)
 	return response.Index
 }
 
@@ -173,7 +173,7 @@ func lock(dir string)bool{
 }
 
 func main() {
-	if len(os.Args) != 2 {
+	if len(os.Args) < 2 {
 		printUsage()
 		return
 	}
@@ -204,16 +204,28 @@ echo > %[1]v
 		return
 	}
 
-	etcdConfig := client.Config{Endpoints: []string{"http://127.0.0.1:4001"}}
-	etcdStartFrom := firstSyncEtcDir(etcdConfig, dir)
+	addr := "http://127.0.0.1:4001"
+	if len(os.Args) > 2 {
+		addr = os.Args[2]
+	}
+
+	etcdRootPath := "/"
+	if len(os.Args) > 3 {
+		etcdRootPath = os.Args[3]
+	}
+
+	fmt.Println(os.Args)
+	etcdConfig := client.Config{Endpoints: []string{addr}}
+	fmt.Println(etcdConfig)
+	etcdStartFrom := firstSyncEtcDir(etcdRootPath, etcdConfig, dir)
 
 	etcdChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 	fsChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 
 	go fileMon(dir, fsChan)
-	go etcdMon(etcdConfig, etcdChan, etcdStartFrom)
+	go etcdMon(etcdRootPath, etcdConfig, etcdChan, etcdStartFrom)
 
-	syncProcess(dir, etcdConfig, etcdChan, fsChan)
+	syncProcess(dir, etcdRootPath, etcdConfig, etcdChan, fsChan)
 }
 
 func printUsage() {
@@ -228,7 +240,7 @@ function for replicate changes between etcd and file system.
 It is never returned function.
 It can be run in separate goroutine or call it as last function in main()
  */
-func syncProcess(dir string, etcdConfig client.Config, etcdChan, fsChan <-chan fileChangeEvent) {
+func syncProcess(dir, etcdRootDir string, etcdConfig client.Config, etcdChan, fsChan <-chan fileChangeEvent) {
 	etcdClient, err := client.New(etcdConfig)
 	if err != nil {
 		panic(err)
@@ -271,7 +283,7 @@ func syncProcess(dir string, etcdConfig client.Config, etcdChan, fsChan <-chan f
 			if event.Path == fsMarkFile {
 				continue
 			}
-			etcdPath := event.Path[len(dir):]
+			etcdPath := etcdRootDir + event.Path[len(dir):]
 			etcdPath = strings.Replace(etcdPath, "\\", "/", -1)
 			switch {
 			case event.IsRemoved:
@@ -300,16 +312,18 @@ func syncProcess(dir string, etcdConfig client.Config, etcdChan, fsChan <-chan f
 	}
 }
 
-func writeNodeToDir(dir string, node *client.Node) {
-	nodePath := filepath.Join(dir, node.Key)
+func writeNodeToDir(dir, root string, node *client.Node) {
+	//log.Println("I can't create dir:  ", node.Key," ", dir, "root:", root)
+	nodePath := filepath.Join(dir, node.Key[len(root)-1:])
+	//log.Println("I can't create dir: ", nodePath, " ", node.Key," ", dir, " ", root)
 	if node.Dir {
 		err := os.Mkdir(nodePath, DEFAULT_DIRMODE)
 		if err != nil && !os.IsExist(err) {
-			log.Println("I can't create dir: ", nodePath)
+			log.Println("I can't create dir: ", nodePath, " ", node.Key," ", dir, " ", root)
 			panic(err)
 		}
 		for _, item := range node.Nodes {
-			writeNodeToDir(dir, item)
+			writeNodeToDir(dir, root, item)
 		}
 	} else {
 		err := ioutil.WriteFile(nodePath, []byte(node.Value), DEFAULT_FILEMODE)
