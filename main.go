@@ -1,8 +1,6 @@
 package main
 
 import (
-
-	//	"github.com/go-fsnotify/fsnotify"
 	"bytes"
 	"fmt"
 	"github.com/coreos/etcd/client"
