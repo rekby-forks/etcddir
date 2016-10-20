@@ -27,7 +27,7 @@ Now it work only with default etcd: http://localhost:2379 without authentication
 If you need normal authenticate mode - write me or create pull request.
 
 
-Can work with 2 and 3 api versions. APIv3 is default.
+Can work with 2 and 3 api versions. APIv3 is default. Now it is compete ignore dirs while sync (sync only files content)
 Now it isn't support for have key, which is directory in map semantic.
 
 For example if etcd have keys:
