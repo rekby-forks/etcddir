@@ -23,5 +23,5 @@ etcdir c:\\tmp\\etcdir
 The mark-file need for prevent fatal-error: etcdir REMOVE ALL CONTENTS from synced dir when start and replace it from etcd.
 
 
-Now it work only with default etcd: http://127.0.0.1:4001 without authentication - for work with local server.
+Now it work only with default etcd: http://localhost:2379 without authentication - for work with local server.
 If you need normal authenticate mode - write me or create pull request.

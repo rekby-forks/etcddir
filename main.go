@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 	"golang.org/x/net/context"
+	"flag"
 )
 
 const MARK_FILE_NAME = ".ETCDIR_MARK_FILE_HUGSDBDND" // Name of lock-file for prevent bad things
@@ -21,6 +22,10 @@ const DEFAULT_DIRMODE = 0777
 const DEFAULT_FILEMODE = 0777
 const EVENT_CHANNEL_LEN = 1000
 const LOCK_INTERVAL = time.Second // Wait since previous touch to can get lock directory once more.
+
+var (
+	serverAddr = flag.String("server", "http://localhost:2379", "Client url for one of cluster servers")
+)
 
 type fileChangeEvent struct {
 	Path      string
@@ -174,12 +179,14 @@ func lock(dir string)bool{
 }
 
 func main() {
-	if len(os.Args) < 2 {
+	flag.Usage = printUsage
+	flag.Parse()
+	if flag.NArg() != 1 {
 		printUsage()
 		return
 	}
 
-	dir, err := filepath.Abs(os.Args[1])
+	dir, err := filepath.Abs(flag.Arg(0))
 	if err != nil {
 		panic(err)
 	}
@@ -205,18 +212,13 @@ echo > %[1]v
 		return
 	}
 
-	addr := "http://127.0.0.1:4001"
-	if len(os.Args) > 2 {
-		addr = os.Args[2]
-	}
-
 	etcdRootPath := "/"
 	if len(os.Args) > 3 {
 		etcdRootPath = os.Args[3]
 	}
 
 	fmt.Println(os.Args)
-	etcdConfig := client.Config{Endpoints: []string{addr}}
+	etcdConfig := client.Config{Endpoints: []string{*serverAddr}}
 	fmt.Println(etcdConfig)
 	etcdStartFrom := firstSyncEtcDir(etcdRootPath, etcdConfig, dir)
 
@@ -230,10 +232,11 @@ echo > %[1]v
 }
 
 func printUsage() {
-	fmt.Printf(`%v <syncdir>
+	fmt.Printf(`%v [options] <syncdir>
 syncdir - directory for show etcd content. ALL CURRENT CONTENT WILL BE LOST.
 you have to create file '%v' in syncdir before can use it.
 `, os.Args[0], MARK_FILE_NAME)
+	flag.PrintDefaults()
 }
 
 /*
