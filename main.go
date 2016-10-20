@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"github.com/coreos/etcd/client"
 	"github.com/rjeczalik/notify"
-	"github.com/coreos/etcd/Godeps/_workspace/src/golang.org/x/net/context"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+	"golang.org/x/net/context"
 )
 
 const MARK_FILE_NAME = ".ETCDIR_MARK_FILE_HUGSDBDND" // Name of lock-file for prevent bad things
