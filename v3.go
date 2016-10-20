@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/mvcc/mvccpb"
 	"golang.org/x/net/context"
 	"io/ioutil"
 	"log"
@@ -10,6 +12,29 @@ import (
 	"strings"
 	"unicode/utf8"
 )
+
+func etcdMon_v3(prefix string, c3 *clientv3.Client, bus chan fileChangeEvent, startRevision int64) {
+	key, option := prefixToKeyOption(prefix)
+	ch := c3.Watch(context.Background(), key, option, clientv3.WithRev(startRevision))
+	for chEvent := range ch {
+		for _, event := range chEvent.Events {
+			fileEvent := fileChangeEvent{
+				Path:    string(event.Kv.Key),
+				Content: event.Kv.Value,
+			}
+			switch event.Type {
+			case mvccpb.PUT:
+				bus <- fileEvent
+			case mvccpb.DELETE:
+				fileEvent.IsRemoved = true
+				bus <- fileEvent
+			default:
+				log.Println("etcdMon_v3 undefined event type: ", event.Type)
+			}
+		}
+	}
+	close(bus)
+}
 
 /*
 Sync localdir to etcd server state.
@@ -20,15 +45,7 @@ Return revision of synced state
 func firstSyncEtcDir_v3(prefix string, c *clientv3.Client, localdir string) int64 {
 	cleanDir(localdir)
 
-	var key string
-	var option clientv3.OpOption
-	if prefix == "" {
-		key = "\x00"
-		option = clientv3.WithFromKey()
-	} else {
-		key = prefix
-		option = clientv3.WithPrefix()
-	}
+	key, option := prefixToKeyOption(prefix)
 
 	// Get all values
 	resp, err := c.Get(context.Background(), key, option, clientv3.WithSort(clientv3.SortByKey, clientv3.SortDescend))
@@ -37,7 +54,7 @@ func firstSyncEtcDir_v3(prefix string, c *clientv3.Client, localdir string) int6
 	}
 
 	for _, kv := range resp.Kvs {
-		targetPath := keyToLocalPath(kv.Key, localdir)
+		targetPath := keyToLocalPath(strings.TrimPrefix(string(kv.Key), prefix), localdir)
 		if targetPath == "" {
 			continue
 		}
@@ -56,15 +73,88 @@ func firstSyncEtcDir_v3(prefix string, c *clientv3.Client, localdir string) int6
 return path to key in localdir.
 Return "" if error.
 */
-func keyToLocalPath(key []byte, localdir string) string {
-	if !utf8.Valid(key) {
+func keyToLocalPath(key string, localdir string) string {
+	if !utf8.ValidString(key) {
 		log.Printf("Key skip, becouse it isn't valid utf8: %x\n", key)
 		return ""
 	}
-	targetPath := filepath.Clean(filepath.Join(localdir, string(key)))
+	targetPath := filepath.Clean(filepath.Join(localdir, key))
 	if !strings.HasPrefix(targetPath, localdir+string(filepath.Separator)) {
-		log.Printf("Key skip, becouse it out of base directory. Key: '%s', TargetPath: '%s'\n", key, targetPath)
+		log.Printf("Key skip, becouse it out of base directory. Key: '%s', TargetPath: '%s'\n, base: '%s'\n", key, targetPath, localdir)
 		return ""
 	}
 	return targetPath
+}
+
+func prefixToKeyOption(prefix string) (key string, option clientv3.OpOption) {
+	if prefix == "" {
+		key = "\x00"
+		option = clientv3.WithFromKey()
+	} else {
+		key = prefix
+		option = clientv3.WithPrefix()
+	}
+
+	return key, option
+}
+
+func syncProcess_v3(localDir string, serverPrefix string, c3 *clientv3.Client, etcdChan, fsChan <-chan fileChangeEvent) {
+	fsMarkFile := filepath.Join(localDir, MARK_FILE_NAME)
+	for {
+		select {
+		case event := <-etcdChan:
+			filePath := keyToLocalPath(strings.TrimPrefix(event.Path, serverPrefix), localDir)
+			if filePath == "" || filePath == fsMarkFile {
+				continue
+			}
+			if event.IsRemoved {
+				os.RemoveAll(filePath)
+				//fmt.Println("Remove: " + filePath)
+			} else {
+				fileContent, err := ioutil.ReadFile(event.Path)
+				if err == nil && bytes.Equal(fileContent, event.Content) {
+					continue
+				}
+
+				dirName := filepath.Dir(event.Path)
+				os.MkdirAll(dirName, DEFAULT_DIRMODE)
+				err = ioutil.WriteFile(filePath, event.Content, DEFAULT_FILEMODE)
+				if err != nil {
+					log.Printf("syncProcess_v3 error while put file '%v': %v\n", event.Path, err)
+				}
+			}
+		case event := <-fsChan:
+			if event.Path == fsMarkFile {
+				continue
+			}
+			etcdPath, err := filepath.Rel(localDir, event.Path)
+			if err != nil {
+				log.Printf("syncProcess_v3 error get relpath '%v': %v\n", event.Path, err)
+				continue
+			}
+			etcdPath = strings.Replace(etcdPath, string(os.PathSeparator), "/", -1)
+
+			switch {
+			case event.IsRemoved:
+				_, err := c3.Delete(context.Background(), etcdPath)
+				if err != nil {
+					log.Printf("syncProcess_v3 error while delete etcdkey '%v': %v\n", etcdPath, err)
+				}
+			case !event.IsDir:
+				resp, err := c3.Get(context.Background(), etcdPath)
+				if err != nil {
+					log.Printf("syncProcess_v3 Can't read key '%v': %v\n", etcdPath, err)
+				}
+				if len(resp.Kvs) > 0 {
+					if bytes.Equal(resp.Kvs[0].Value, event.Content) {
+						continue
+					}
+				}
+				_, err = c3.Put(context.Background(), etcdPath, string(event.Content))
+				if err != nil {
+					log.Printf("syncProcess_v3 error while put etcdkey '%v': %v\n", etcdPath, err)
+				}
+			}
+		}
+	}
 }

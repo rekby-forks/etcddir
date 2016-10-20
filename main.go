@@ -21,7 +21,7 @@ const LOCK_INTERVAL = time.Second // Wait since previous touch to can get lock d
 
 var (
 	serverAddr    = flag.String("server", "http://localhost:2379", "Client url for one of cluster servers")
-	serverRootDir = flag.String("root", "/", "server root dir for map")
+	serverRootDir = flag.String("root", "", "server root dir for map")
 	apiVersion    = flag.Int("api", 3, "Api version 2 or 3")
 )
 
@@ -162,6 +162,8 @@ echo > %[1]v
 	}
 
 	fmt.Println(os.Args)
+
+	etcdChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 	fsChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 	go fileMon(dir, fsChan)
 
@@ -170,7 +172,6 @@ echo > %[1]v
 		etcdConfig := client.Config{Endpoints: []string{*serverAddr}}
 		fmt.Printf("%#v\n", etcdConfig)
 		etcdStartFrom := firstSyncEtcDir_v2(*serverRootDir, etcdConfig, dir)
-		etcdChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 		go etcdMon_v2(*serverRootDir, etcdConfig, etcdChan, etcdStartFrom)
 
 		syncProcess_v2(dir, *serverRootDir, etcdConfig, etcdChan, fsChan)
@@ -183,7 +184,9 @@ echo > %[1]v
 		if err != nil {
 			panic(err)
 		}
-		firstSyncEtcDir_v3(*serverRootDir, c3, dir)
+		startRevision := firstSyncEtcDir_v3(*serverRootDir, c3, dir)
+		go etcdMon_v3(*serverRootDir, c3, etcdChan, startRevision)
+		syncProcess_v3(dir,*serverRootDir, c3, etcdChan, fsChan)
 	default:
 		panic("Unsupported API version")
 	}
