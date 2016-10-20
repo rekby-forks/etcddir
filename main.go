@@ -23,6 +23,7 @@ const LOCK_INTERVAL = time.Second // Wait since previous touch to can get lock d
 
 var (
 	serverAddr = flag.String("server", "http://localhost:2379", "Client url for one of cluster servers")
+	serverRootDir = flag.String("root", "/", "server root dir for map")
 )
 
 type fileChangeEvent struct {
@@ -210,23 +211,18 @@ echo > %[1]v
 		return
 	}
 
-	etcdRootPath := "/"
-	if len(os.Args) > 3 {
-		etcdRootPath = os.Args[3]
-	}
-
 	fmt.Println(os.Args)
 	etcdConfig := client.Config{Endpoints: []string{*serverAddr}}
 	fmt.Println(etcdConfig)
-	etcdStartFrom := firstSyncEtcDir(etcdRootPath, etcdConfig, dir)
+	etcdStartFrom := firstSyncEtcDir(*serverRootDir, etcdConfig, dir)
 
 	etcdChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 	fsChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 
 	go fileMon(dir, fsChan)
-	go etcdMon(etcdRootPath, etcdConfig, etcdChan, etcdStartFrom)
+	go etcdMon(*serverRootDir, etcdConfig, etcdChan, etcdStartFrom)
 
-	syncProcess(dir, etcdRootPath, etcdConfig, etcdChan, fsChan)
+	syncProcess(dir, *serverRootDir, etcdConfig, etcdChan, fsChan)
 }
 
 func printUsage() {
