@@ -143,7 +143,8 @@ func firstSyncEtcDir(etcdRootPath string, etcdConfig client.Config, dir string) 
 		panic(err)
 	}
 	writeNodeToDir(dir, etcdRootPath, response.Node)
-	return response.Index
+	etcdIndex = response.Index
+	return
 }
 
 /*
@@ -231,7 +232,7 @@ echo > %[1]v
 func printUsage() {
 	fmt.Printf(`%v <syncdir>
 syncdir - directory for show etcd content. ALL CURRENT CONTENT WILL BE LOST.
-you have to create file '{1}' in syncdir before can use it.
+you have to create file '%v' in syncdir before can use it.
 `, os.Args[0], MARK_FILE_NAME)
 }
 
