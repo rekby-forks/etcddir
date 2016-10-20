@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/coreos/etcd/client"
 	"github.com/rjeczalik/notify"
@@ -9,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"flag"
+	"github.com/coreos/etcd/clientv3"
 )
 
 const MARK_FILE_NAME = ".ETCDIR_MARK_FILE_HUGSDBDND" // Name of lock-file for prevent bad things
@@ -19,8 +20,9 @@ const EVENT_CHANNEL_LEN = 1000
 const LOCK_INTERVAL = time.Second // Wait since previous touch to can get lock directory once more.
 
 var (
-	serverAddr = flag.String("server", "http://localhost:2379", "Client url for one of cluster servers")
+	serverAddr    = flag.String("server", "http://localhost:2379", "Client url for one of cluster servers")
 	serverRootDir = flag.String("root", "/", "server root dir for map")
+	apiVersion    = flag.Int("api", 3, "Api version 2 or 3")
 )
 
 type fileChangeEvent struct {
@@ -33,7 +35,7 @@ type fileChangeEvent struct {
 /*
 Monitoring changes in file system.
 It designed for run in separate goroutine.
- */
+*/
 func fileMon(path string, bus chan fileChangeEvent) {
 	// Make the channel buffered to ensure no event is dropped. Notify will drop
 	// an event if the receiver is not able to keep up the sending pace.
@@ -73,7 +75,7 @@ func fileMon(path string, bus chan fileChangeEvent) {
 	}
 }
 
-func cleanDir(dir string){
+func cleanDir(dir string) {
 	dirFile, err := os.Open(dir)
 	if err != nil {
 		panic(err)
@@ -102,8 +104,8 @@ func cleanDir(dir string){
 /*
 Check if dir can be locked and lock it.
 Return true if lock succesfully.
- */
-func lock(dir string)bool{
+*/
+func lock(dir string) bool {
 	lockFile := filepath.Join(dir, MARK_FILE_NAME)
 	stat, err := os.Stat(lockFile)
 	if err != nil {
@@ -115,7 +117,7 @@ func lock(dir string)bool{
 	}
 
 	pid := os.Getpid()
-	go func(){
+	go func() {
 		for {
 			mess := fmt.Sprint("PID: ", pid, "\nLAST TIME: ", time.Now().String())
 			ioutil.WriteFile(lockFile, []byte(mess), DEFAULT_FILEMODE)
@@ -154,23 +156,37 @@ echo > %[1]v
 		return
 	}
 
-	if !lock(dir){
+	if !lock(dir) {
 		log.Println("Can't get lock. May be another instance work with the dir")
 		return
 	}
 
 	fmt.Println(os.Args)
-	etcdConfig := client.Config{Endpoints: []string{*serverAddr}}
-	fmt.Println(etcdConfig)
-	etcdStartFrom := firstSyncEtcDir_v2(*serverRootDir, etcdConfig, dir)
-
-	etcdChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 	fsChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
-
 	go fileMon(dir, fsChan)
-	go etcdMon_v2(*serverRootDir, etcdConfig, etcdChan, etcdStartFrom)
 
-	syncProcess_v2(dir, *serverRootDir, etcdConfig, etcdChan, fsChan)
+	switch *apiVersion {
+	case 2:
+		etcdConfig := client.Config{Endpoints: []string{*serverAddr}}
+		fmt.Printf("%#v\n", etcdConfig)
+		etcdStartFrom := firstSyncEtcDir_v2(*serverRootDir, etcdConfig, dir)
+		etcdChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
+		go etcdMon_v2(*serverRootDir, etcdConfig, etcdChan, etcdStartFrom)
+
+		syncProcess_v2(dir, *serverRootDir, etcdConfig, etcdChan, fsChan)
+	case 3:
+		etcdConfig := clientv3.Config{
+			Endpoints:[]string{*serverAddr},
+		}
+		fmt.Printf("%#v\n", etcdConfig)
+		c3, err := clientv3.New(etcdConfig)
+		if err != nil {
+			panic(err)
+		}
+		firstSyncEtcDir_v3(*serverRootDir, c3, dir)
+	default:
+		panic("Unsupported API version")
+	}
 }
 
 func printUsage() {
@@ -180,4 +196,3 @@ you have to create file '%v' in syncdir before can use it.
 `, os.Args[0], MARK_FILE_NAME)
 	flag.PrintDefaults()
 }
-

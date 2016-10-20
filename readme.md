@@ -25,3 +25,5 @@ The mark-file need for prevent fatal-error: etcdir REMOVE ALL CONTENTS from sync
 
 Now it work only with default etcd: http://localhost:2379 without authentication - for work with local server.
 If you need normal authenticate mode - write me or create pull request.
+
+Can work with 2 and 3 api versions. APIv3 is default.
