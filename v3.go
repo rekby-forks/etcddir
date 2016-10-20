@@ -132,6 +132,7 @@ func syncProcess_v3(localDir string, serverPrefix string, c3 *clientv3.Client, e
 				log.Printf("syncProcess_v3 error get relpath '%v': %v\n", event.Path, err)
 				continue
 			}
+			etcdPath = serverPrefix + etcdPath
 			etcdPath = strings.Replace(etcdPath, string(os.PathSeparator), "/", -1)
 
 			switch {
