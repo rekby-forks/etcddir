@@ -58,7 +58,6 @@ func firstSyncEtcDir_v3(prefix string, c *clientv3.Client, localdir string) int6
 		if targetPath == "" {
 			continue
 		}
-
 		targetDir := filepath.Dir(targetPath)
 		os.MkdirAll(targetDir, DEFAULT_DIRMODE)
 		err = ioutil.WriteFile(targetPath, kv.Value, DEFAULT_FILEMODE)
@@ -127,35 +126,58 @@ func syncProcess_v3(localDir string, serverPrefix string, c3 *clientv3.Client, e
 			if event.Path == fsMarkFile {
 				continue
 			}
-			etcdPath, err := filepath.Rel(localDir, event.Path)
-			if err != nil {
-				log.Printf("syncProcess_v3 error get relpath '%v': %v\n", event.Path, err)
-				continue
-			}
-			etcdPath = serverPrefix + etcdPath
-			etcdPath = strings.Replace(etcdPath, string(os.PathSeparator), "/", -1)
+			syncProcess_v3FSEvent(localDir, serverPrefix, c3, event)
 
-			switch {
-			case event.IsRemoved:
-				_, err := c3.Delete(context.Background(), etcdPath)
+		}
+	}
+}
+
+func syncProcess_v3FSEvent(localDir string, serverPrefix string, c3 *clientv3.Client, event fileChangeEvent) {
+	etcdPath, err := filepath.Rel(localDir, event.Path)
+	if err != nil {
+		log.Printf("syncProcess_v3 error get relpath '%v': %v\n", event.Path, err)
+		return
+	}
+	etcdPath = serverPrefix + etcdPath
+	etcdPath = strings.Replace(etcdPath, string(os.PathSeparator), "/", -1)
+
+	switch {
+	case event.IsRemoved:
+		_, err := c3.Delete(context.Background(), etcdPath)
+		if err != nil {
+			log.Printf("syncProcess_v3 error while delete etcdkey '%v': %v\n", etcdPath, err)
+		}
+	case event.IsDir:
+		files, _ := ioutil.ReadDir(event.Path)
+		for _, file := range files {
+			path := filepath.Join(event.Path, file.Name())
+			content := []byte(nil)
+			if !file.IsDir() {
+				content, err = ioutil.ReadFile(path)
 				if err != nil {
-					log.Printf("syncProcess_v3 error while delete etcdkey '%v': %v\n", etcdPath, err)
-				}
-			case !event.IsDir:
-				resp, err := c3.Get(context.Background(), etcdPath)
-				if err != nil {
-					log.Printf("syncProcess_v3 Can't read key '%v': %v\n", etcdPath, err)
-				}
-				if len(resp.Kvs) > 0 {
-					if bytes.Equal(resp.Kvs[0].Value, event.Content) {
-						continue
-					}
-				}
-				_, err = c3.Put(context.Background(), etcdPath, string(event.Content))
-				if err != nil {
-					log.Printf("syncProcess_v3 error while put etcdkey '%v': %v\n", etcdPath, err)
+					log.Println(err)
 				}
 			}
+			syncProcess_v3FSEvent(localDir, serverPrefix, c3, fileChangeEvent{
+				Path:      path,
+				IsDir:     file.IsDir(),
+				IsRemoved: false,
+				Content:   content,
+			})
+		}
+	case !event.IsDir:
+		resp, err := c3.Get(context.Background(), etcdPath)
+		if err != nil {
+			log.Printf("syncProcess_v3 Can't read key '%v': %v\n", etcdPath, err)
+		}
+		if len(resp.Kvs) > 0 {
+			if bytes.Equal(resp.Kvs[0].Value, event.Content) {
+				return
+			}
+		}
+		_, err = c3.Put(context.Background(), etcdPath, string(event.Content))
+		if err != nil {
+			log.Printf("syncProcess_v3 error while put etcdkey '%v': %v\n", etcdPath, err)
 		}
 	}
 }
