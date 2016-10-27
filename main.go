@@ -165,13 +165,13 @@ echo > %[1]v
 
 	etcdChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
 	fsChan := make(chan fileChangeEvent, EVENT_CHANNEL_LEN)
-	go fileMon(dir, fsChan)
 
 	switch *apiVersion {
 	case 2:
 		etcdConfig := client.Config{Endpoints: []string{*serverAddr}}
 		fmt.Printf("%#v\n", etcdConfig)
 		etcdStartFrom := firstSyncEtcDir_v2(*serverPrefix, etcdConfig, dir)
+		go fileMon(dir, fsChan)
 		go etcdMon_v2(*serverPrefix, etcdConfig, etcdChan, etcdStartFrom)
 
 		syncProcess_v2(dir, *serverPrefix, etcdConfig, etcdChan, fsChan)
@@ -185,6 +185,7 @@ echo > %[1]v
 			panic(err)
 		}
 		startRevision := firstSyncEtcDir_v3(*serverPrefix, c3, dir)
+		go fileMon(dir, fsChan)
 		go etcdMon_v3(*serverPrefix, c3, etcdChan, startRevision)
 		syncProcess_v3(dir,*serverPrefix, c3, etcdChan, fsChan)
 	default:
