@@ -23,6 +23,8 @@ var (
 	serverAddr    = flag.String("server", "http://localhost:2379", "Client url for one of cluster servers")
 	serverPrefix = flag.String("prefix", "", "server root dir for map")
 	apiVersion    = flag.Int("api", 3, "Api version 2 or 3")
+	printVersion = flag.Bool("version", false, "Print version and exit.")
+	VERSION = "unversioned"
 )
 
 type fileChangeEvent struct {
@@ -130,6 +132,12 @@ func lock(dir string) bool {
 func main() {
 	flag.Usage = printUsage
 	flag.Parse()
+
+	if *printVersion {
+		fmt.Println(VERSION)
+		return
+	}
+
 	if flag.NArg() != 1 {
 		printUsage()
 		return
