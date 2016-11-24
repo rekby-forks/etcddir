@@ -9,12 +9,12 @@ before_deploy:
   - mkdir release
   - cp README.md README.txt
   - 'GOARCH=386 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-linux-i386.tar.gz etcddir README.txt'
-  - 'GOARCH=amd64 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-linux-amd64.tar.gz etcddir README.txt'
-  - 'GOARCH=386 GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-freebsd-i386.tar.gz etcddir README.txt'
-  - 'GOARCH=amd64 GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-freebsd-amd64.tar.gz etcddir README.txt'
+#  - 'GOARCH=amd64 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-linux-amd64.tar.gz etcddir README.txt'
+#  - 'GOARCH=386 GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-freebsd-i386.tar.gz etcddir README.txt'
+#  - 'GOARCH=amd64 GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-freebsd-amd64.tar.gz etcddir README.txt'
   - unix2dos -n README.md README.txt
   - 'GOARCH=386 GOOS=windows go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir.exe; zip release/etcddir-windows-i386.zip etcddir.exe README.txt'
-  - 'GOARCH=amd64 GOOS=windows go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir.exe; zip release/etcddir-windows-amd64.zip etcddir.exe README.txt'
+#  - 'GOARCH=amd64 GOOS=windows go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir.exe; zip release/etcddir-windows-amd64.zip etcddir.exe README.txt'
 
 addons:
   apt:
@@ -32,8 +32,8 @@ deploy:
   api_key: $GITHUB_TOKEN
   file:
     - "release/etcddir-linux-i386.tar.gz"
-    - "release/etcddir-linux-amd64.tar.gz"
-    - "release/etcddir-freebsd-i386.tar.gz"
-    - "release/etcddir-freebsd-amd64.tar.gz"
+#    - "release/etcddir-linux-amd64.tar.gz"
+#    - "release/etcddir-freebsd-i386.tar.gz"
+#    - "release/etcddir-freebsd-amd64.tar.gz"
     - "release/etcddir-windows-i386.zip"
-    - "release/etcddir-windows-amd64.zip"
+#    - "release/etcddir-windows-amd64.zip"
