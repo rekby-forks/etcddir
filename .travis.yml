@@ -8,7 +8,7 @@ script: bash ./travis.bash
 before_deploy:
   - mkdir release
   - cp README.md README.txt
-  - 'GOARCH=386 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-linux-i386.tar.gz lets-proxy README.txt'
+  - 'GOARCH=386 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-linux-i386.tar.gz etcddir README.txt'
   - 'GOARCH=amd64 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-linux-amd64.tar.gz etcddir README.txt'
   - 'GOARCH=386 GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-freebsd-i386.tar.gz etcddir README.txt'
   - 'GOARCH=amd64 GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o etcddir; tar -zcf release/etcddir-freebsd-amd64.tar.gz etcddir README.txt'
