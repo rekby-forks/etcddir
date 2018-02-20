@@ -1,7 +1,7 @@
 language: go
 
 go:
-- 1.10
+- 1.x
 
 script: bash ./travis.bash
 
@@ -28,7 +28,7 @@ deploy:
   on:
     repo: rekby/etcddir
     tags: true
-  go: 1.7
+  go: 1.x
   api_key: $GITHUB_TOKEN
   file:
     - "release/etcddir-linux-i386.tar.gz"
