@@ -2,15 +2,24 @@ package main
 
 import (
 	"bytes"
-	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/mvcc/mvccpb"
-	"golang.org/x/net/context"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/coreos/etcd/clientv3"
+	"golang.org/x/net/context"
+)
+
+const (
+	// constant vendor
+	// copy from https://github.com/coreos/etcd/blob/80d15948bcfc93aabd2c5245d7993c8a9e76bf8f/internal/mvcc/mvccpb/kv.pb.go
+	//PUT    Event_EventType = 0
+	//DELETE Event_EventType = 1
+	ETCD_EVENT_PUT    = 0
+	ETCD_EVENT_DELETE = 1
 )
 
 func etcdMon_v3(prefix string, c3 *clientv3.Client, bus chan fileChangeEvent, startRevision int64) {
@@ -22,10 +31,11 @@ func etcdMon_v3(prefix string, c3 *clientv3.Client, bus chan fileChangeEvent, st
 				Path:    string(event.Kv.Key),
 				Content: event.Kv.Value,
 			}
-			switch event.Type {
-			case mvccpb.PUT:
+			event.IsCreate()
+			switch int(event.Type) {
+			case ETCD_EVENT_PUT:
 				bus <- fileEvent
-			case mvccpb.DELETE:
+			case ETCD_EVENT_DELETE:
 				fileEvent.IsRemoved = true
 				bus <- fileEvent
 			default:
